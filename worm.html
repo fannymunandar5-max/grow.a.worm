@@ -1,0 +1,271 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Cacing Rush - Zafran</title>
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;padding:15px 10px;background:#080b18;
+  color:white;font-family:Arial,sans-serif;text-align:center;
+  touch-action:manipulation;
+}
+h1{color:#00ffae;text-shadow:0 0 15px #00ffae;margin:10px}
+p{color:#bdc9e8}
+.credit{color:#00ffae;font-weight:bold;font-size:13px}
+.game{width:min(94vw,440px);margin:auto}
+.hud{display:flex;justify-content:space-between;padding:12px 3px;color:#00ffae;font-weight:bold}
+canvas{
+  display:block;width:100%;height:auto;
+  border:2px solid #00ffae;border-radius:12px;
+  background:#0a1020;touch-action:none;
+}
+button{
+  border:0;border-radius:12px;background:#00ffae;color:#06140e;
+  padding:14px 20px;font-size:17px;font-weight:bold;
+  cursor:pointer;touch-action:none;user-select:none;
+}
+button:active{transform:scale(.94)}
+#start{margin:12px}
+.pad{
+  width:190px;margin:12px auto;
+  display:grid;grid-template-columns:repeat(3,1fr);
+  gap:7px;
+}
+.pad button{padding:13px 0;font-size:22px}
+.empty{visibility:hidden}
+#status{min-height:22px;color:#00ffae;font-weight:bold}
+</style>
+</head>
+<body>
+
+<h1>🐍 CACiNG RUSH</h1>
+<p>Makan makanan, tumbuh besar, jangan menabrak!</p>
+<p class="credit">✨ Buatan Zafran Dan Siap Untuk Dimainkan ✨</p>
+
+<div class="game">
+  <div class="hud">
+    <span>⭐ Skor: <span id="score">0</span></span>
+    <span>🏆 Rekor: <span id="best">0</span></span>
+  </div>
+  <canvas id="board" width="400" height="400"></canvas>
+  <div id="status">Tekan MULAI untuk bermain!</div>
+  <button id="start">▶ MULAI MAIN</button>
+</div>
+
+<div class="pad">
+  <span class="empty"></span>
+  <button data-dir="up">⬆️</button>
+  <span class="empty"></span>
+  <button data-dir="left">⬅️</button>
+  <button data-dir="down">⬇️</button>
+  <button data-dir="right">➡️</button>
+</div>
+
+<p>📱 HP: gunakan tombol arah<br>💻 PC: gunakan tombol panah atau WASD</p>
+
+<script>
+const canvas=document.getElementById("board");
+const ctx=canvas.getContext("2d");
+const SIZE=20,CELLS=20;
+const scoreText=document.getElementById("score");
+const bestText=document.getElementById("best");
+const statusText=document.getElementById("status");
+const startBtn=document.getElementById("start");
+
+let snake,food,dir,nextDir,score,running,gameOver;
+let timer=null;
+let best=0;
+
+try{best=Number(localStorage.getItem("cacingBest"))||0}catch(e){}
+bestText.textContent=best;
+
+function reset(){
+  snake=[
+    {x:8,y:10},
+    {x:7,y:10},
+    {x:6,y:10}
+  ];
+  dir={x:1,y:0};
+  nextDir={x:1,y:0};
+  score=0;
+  scoreText.textContent=0;
+  food=createFood();
+  running=false;
+  gameOver=false;
+  draw();
+}
+
+function createFood(){
+  let f;
+  do{
+    f={
+      x:Math.floor(Math.random()*CELLS),
+      y:Math.floor(Math.random()*CELLS)
+    };
+  }while(snake&&snake.some(s=>s.x===f.x&&s.y===f.y));
+  return f;
+}
+
+function startGame(){
+  clearInterval(timer);
+  reset();
+  running=true;
+  statusText.textContent="Ayo makan sebanyak-banyaknya!";
+  startBtn.textContent="🔄 MULAI ULANG";
+  timer=setInterval(step,125);
+}
+
+function setDirection(name){
+  const dirs={
+    up:{x:0,y:-1},
+    down:{x:0,y:1},
+    left:{x:-1,y:0},
+    right:{x:1,y:0}
+  };
+  const d=dirs[name];
+  if(!d)return;
+  // Cacing tidak bisa berbalik langsung ke tubuhnya sendiri
+  if(d.x===-dir.x&&d.y===-dir.y)return;
+  nextDir=d;
+}
+
+function step(){
+  if(!running)return;
+  dir=nextDir;
+
+  const head={
+    x:snake[0].x+dir.x,
+    y:snake[0].y+dir.y
+  };
+
+  const eating=head.x===food.x&&head.y===food.y;
+
+  // Tabrak dinding
+  if(head.x<0||head.y<0||head.x>=CELLS||head.y>=CELLS){
+    endGame();return;
+  }
+
+  // Saat tidak makan, ekor bergerak sehingga petak ekor boleh dimasuki
+  const body=eating?snake:snake.slice(0,-1);
+  if(body.some(s=>s.x===head.x&&s.y===head.y)){
+    endGame();return;
+  }
+
+  snake.unshift(head);
+
+  if(eating){
+    score+=10;
+    scoreText.textContent=score;
+    food=createFood();
+
+    if(score>best){
+      best=score;
+      bestText.textContent=best;
+      try{localStorage.setItem("cacingBest",best)}catch(e){}
+    }
+  }else{
+    snake.pop();
+  }
+  draw();
+}
+
+function draw(){
+  ctx.clearRect(0,0,400,400);
+  ctx.fillStyle="#0a1020";
+  ctx.fillRect(0,0,400,400);
+
+  // Grid
+  ctx.strokeStyle="#ffffff0b";
+  ctx.lineWidth=1;
+  for(let i=0;i<=400;i+=SIZE){
+    ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,400);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(400,i);ctx.stroke();
+  }
+
+  // Makanan
+  ctx.save();
+  ctx.shadowColor="#ff426d";ctx.shadowBlur=16;
+  ctx.fillStyle="#ff426d";
+  ctx.beginPath();
+  ctx.arc(food.x*SIZE+10,food.y*SIZE+10,7,0,Math.PI*2);
+  ctx.fill();ctx.restore();
+
+  // Tubuh cacing
+  snake.forEach((s,i)=>{
+    const pad=i===0?2:3;
+    ctx.save();
+    ctx.shadowColor="#00ffae";
+    ctx.shadowBlur=i===0?12:5;
+    ctx.fillStyle=i===0?"#b7ffdc":"#00d991";
+    ctx.beginPath();
+    ctx.roundRect(
+      s.x*SIZE+pad,s.y*SIZE+pad,
+      SIZE-pad*2,SIZE-pad*2,6
+    );
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Mata
+  const h=snake[0];
+  ctx.fillStyle="#07151a";
+  if(dir.x!==0){
+    ctx.beginPath();
+    ctx.arc(h.x*SIZE+10,h.y*SIZE+6,2,0,Math.PI*2);
+    ctx.arc(h.x*SIZE+10,h.y*SIZE+14,2,0,Math.PI*2);
+    ctx.fill();
+  }else{
+    ctx.beginPath();
+    ctx.arc(h.x*SIZE+6,h.y*SIZE+10,2,0,Math.PI*2);
+    ctx.arc(h.x*SIZE+14,h.y*SIZE+10,2,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function endGame(){
+  running=false;
+  gameOver=true;
+  clearInterval(timer);
+  statusText.textContent="💥 GAME OVER! Skor kamu: "+score;
+  startBtn.textContent="🔁 MAIN LAGI";
+  draw();
+
+  ctx.fillStyle="#030713bb";
+  ctx.fillRect(35,145,330,110);
+  ctx.textAlign="center";
+  ctx.fillStyle="#00ffae";
+  ctx.font="bold 27px Arial";
+  ctx.fillText("GAME OVER!",200,190);
+  ctx.fillStyle="white";
+  ctx.font="18px Arial";
+  ctx.fillText("Skor: "+score,200,222);
+}
+
+startBtn.addEventListener("click",startGame);
+
+document.querySelectorAll("[data-dir]").forEach(btn=>{
+  btn.addEventListener("pointerdown",e=>{
+    e.preventDefault();
+    setDirection(btn.dataset.dir);
+  });
+});
+
+document.addEventListener("keydown",e=>{
+  const keys={
+    ArrowUp:"up",w:"up",ArrowDown:"down",s:"down",
+    ArrowLeft:"left",a:"left",ArrowRight:"right",d:"right"
+  };
+  const k=keys[e.key]||keys[e.key.toLowerCase()];
+  if(k){
+    e.preventDefault();
+    setDirection(k);
+  }
+});
+
+reset();
+</script>
+</body>
+</html>
